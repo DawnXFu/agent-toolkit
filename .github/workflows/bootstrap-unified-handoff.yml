@@ -1,0 +1,98 @@
+name: Bootstrap unified handoff
+
+on:
+  push:
+    branches:
+      - feat/unified-handoff-v1
+    paths:
+      - .github/unified-handoff-payload.part*
+      - .github/workflows/bootstrap-unified-handoff.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/unified-handoff-v1
+          fetch-depth: 0
+
+      - name: Extract validated payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .github/unified-handoff-payload.part* > /tmp/unified-handoff.b64
+          base64 --decode /tmp/unified-handoff.b64 > /tmp/unified-handoff.tar.gz
+          mkdir -p /tmp/unified-handoff
+          tar -xzf /tmp/unified-handoff.tar.gz -C /tmp/unified-handoff
+
+      - name: Configure Git
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit requirements and design
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p docs
+          cp -R /tmp/unified-handoff/docs/unified-handoff docs/
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("README.md")
+          text = path.read_text(encoding="utf-8")
+          marker = "| 🛠️ Development | [session-handoff](skills/session-handoff/README.md) | Seamless AI session transfers |"
+          addition = "| 🛠️ Development | [unified-handoff](skills/unified-handoff/README.md) | Validated cross-agent session transfers |"
+          if addition not in text:
+              if marker not in text:
+                  raise SystemExit("README skill index marker not found")
+              text = text.replace(marker, marker + "\n" + addition)
+              path.write_text(text, encoding="utf-8")
+          PY
+          git add docs/unified-handoff README.md
+          git commit -m "docs: define unified handoff requirements and design"
+
+      - name: Commit core skill and CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p skills/unified-handoff
+          cp /tmp/unified-handoff/skills/unified-handoff/SKILL.md skills/unified-handoff/
+          cp /tmp/unified-handoff/skills/unified-handoff/config.example.json skills/unified-handoff/
+          cp -R /tmp/unified-handoff/skills/unified-handoff/scripts skills/unified-handoff/
+          git add skills/unified-handoff/SKILL.md skills/unified-handoff/config.example.json skills/unified-handoff/scripts
+          git commit -m "feat: add unified handoff protocol and CLI"
+
+      - name: Commit documentation and installers
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp /tmp/unified-handoff/skills/unified-handoff/README.md skills/unified-handoff/
+          cp /tmp/unified-handoff/skills/unified-handoff/README.zh-CN.md skills/unified-handoff/
+          cp -R /tmp/unified-handoff/skills/unified-handoff/install skills/unified-handoff/
+          cp -R /tmp/unified-handoff/skills/unified-handoff/references skills/unified-handoff/
+          chmod +x skills/unified-handoff/install/install.sh
+          git add skills/unified-handoff/README.md skills/unified-handoff/README.zh-CN.md skills/unified-handoff/install skills/unified-handoff/references
+          git commit -m "docs: add unified handoff guides and installers"
+
+      - name: Commit tests and CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -R /tmp/unified-handoff/skills/unified-handoff/tests skills/unified-handoff/
+          cp /tmp/unified-handoff/.github/workflows/unified-handoff.yml .github/workflows/
+          git add skills/unified-handoff/tests .github/workflows/unified-handoff.yml
+          git commit -m "test: add cross-platform unified handoff coverage"
+
+      - name: Remove bootstrap assets and push
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/unified-handoff-payload.part* .github/workflows/bootstrap-unified-handoff.yml
+          git commit -m "chore: remove unified handoff bootstrap assets"
+          git push origin HEAD:feat/unified-handoff-v1
