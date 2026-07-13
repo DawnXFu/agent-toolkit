@@ -25,14 +25,20 @@ from handoff_lib import (
     write_default_config,
 )
 
+VALID_SOURCE_AGENTS = ("auto",) + tuple(agent for agent in VALID_AGENTS if agent != "any") + ("unknown",)
+
 
 def emit_json(value: Any) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2))
 
 
-def load_project(args: argparse.Namespace) -> tuple[Path, Dict[str, Any]]:
+def resolve_root(args: argparse.Namespace) -> Path:
     explicit = Path(args.project_root).expanduser() if args.project_root else None
-    root = resolve_project_root(Path.cwd(), explicit)
+    return resolve_project_root(Path.cwd(), explicit)
+
+
+def load_project(args: argparse.Namespace) -> tuple[Path, Dict[str, Any]]:
+    root = resolve_root(args)
     config_path: Optional[Path] = None
     if args.config:
         config_path = Path(args.config).expanduser().resolve()
@@ -78,7 +84,9 @@ def print_validation(result: Any) -> None:
 
 
 def cmd_init(args: argparse.Namespace) -> int:
-    root, _ = load_project(args)
+    # init must be able to repair an invalid existing config when --force is used,
+    # so it resolves the root without loading that config first.
+    root = resolve_root(args)
     path = write_default_config(root, overwrite=args.force)
     print(path)
     return 0
@@ -101,7 +109,7 @@ def cmd_create(args: argparse.Namespace) -> int:
         emit_json({"status": "draft", "path": str(path)})
     else:
         print(path)
-        print("Fill all placeholders, then run validate --finalize.")
+        print("Fill all placeholders, then run validate --finalize with this draft path.")
     return 0
 
 
@@ -172,7 +180,7 @@ def cmd_resume(args: argparse.Namespace) -> int:
     else:
         print(result["prompt"])
         print(f"Staleness: {result['staleness']['level']}")
-    return 0
+    return 0 if result["staleness"]["level"] in {"FRESH", "SLIGHTLY_STALE"} else 1
 
 
 def cmd_migrate(args: argparse.Namespace) -> int:
@@ -198,7 +206,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="unified_handoff.py")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    init = sub.add_parser("init", help="Create default project configuration")
+    init = sub.add_parser("init", help="Create or repair default project configuration")
     add_common(init)
     init.add_argument("--force", action="store_true")
     init.set_defaults(func=cmd_init)
@@ -208,18 +216,22 @@ def build_parser() -> argparse.ArgumentParser:
     create.add_argument("slug", nargs="?")
     create.add_argument("--goal")
     create.add_argument("--mode", choices=VALID_MODES)
-    create.add_argument("--source", default="auto")
+    create.add_argument("--source", choices=VALID_SOURCE_AGENTS, default="auto")
     create.add_argument("--target", choices=VALID_AGENTS)
     create.add_argument("--language")
     create.add_argument("--continues-from")
     create.set_defaults(func=cmd_create)
 
-    for name in ("validate", "check"):
-        validate = sub.add_parser(name, help="Validate a handoff")
-        add_common(validate)
-        validate.add_argument("file", nargs="?")
-        validate.add_argument("--finalize", action="store_true")
-        validate.set_defaults(func=cmd_validate)
+    validate = sub.add_parser("validate", help="Validate and optionally finalize a handoff")
+    add_common(validate)
+    validate.add_argument("file", help="Draft or handoff file to validate")
+    validate.add_argument("--finalize", action="store_true")
+    validate.set_defaults(func=cmd_validate)
+
+    check = sub.add_parser("check", help="Validate a handoff without finalizing it")
+    add_common(check)
+    check.add_argument("file", help="Draft or handoff file to check")
+    check.set_defaults(func=cmd_validate, finalize=False)
 
     listing = sub.add_parser("list", help="List handoffs")
     add_common(listing)
