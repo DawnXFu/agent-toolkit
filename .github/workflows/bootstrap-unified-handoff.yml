@@ -7,6 +7,12 @@ on:
     paths:
       - .github/unified-handoff-payload.part*
       - .github/workflows/bootstrap-unified-handoff.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/unified-handoff-payload.part*
+      - .github/workflows/bootstrap-unified-handoff.yml
 
 permissions:
   contents: write
