@@ -106,7 +106,7 @@ Add skills to project knowledge or paste SKILL.md contents into the conversation
 | 📝 Documentation | [backend-to-frontend-handoff-docs](skills/backend-to-frontend-handoff-docs/README.md) | API handoff docs for frontend |
 | 📝 Documentation | [c4-architecture](skills/c4-architecture/README.md) | C4 architecture diagrams with Mermaid |
 | 📝 Documentation | [crafting-effective-readmes](skills/crafting-effective-readmes/README.md) | Write effective README files |
-| 📝 Documentation | [draw-io](skills/draw-io/README.md) | Create & edit draw.io diagrams |
+| 📝 Documentation | [draw-io](skills/draw-io/README.md) | Work with draw.io diagrams |
 | 📝 Documentation | [excalidraw](skills/excalidraw/README.md) | Work with Excalidraw diagrams |
 | 📝 Documentation | [frontend-to-backend-requirements](skills/frontend-to-backend-requirements/README.md) | Document API requirements |
 | 📝 Documentation | [marp-slide](skills/marp-slide/README.md) | Professional presentation slides |
@@ -123,6 +123,7 @@ Add skills to project knowledge or paste SKILL.md contents into the conversation
 | 🛠️ Development | [lesson-learned](skills/lesson-learned/README.md) | Extract SE lessons from recent code changes |
 | 🛠️ Development | [reducing-entropy](skills/reducing-entropy/README.md) | Minimize codebase size |
 | 🛠️ Development | [session-handoff](skills/session-handoff/README.md) | Seamless AI session transfers |
+| 🛠️ Development | [unified-handoff](skills/unified-handoff/README.md) | Validated cross-agent session transfers |
 | 🎯 Planning | [game-changing-features](skills/game-changing-features/README.md) | Find 10x product opportunities |
 | 🎯 Planning | [gepetto](skills/gepetto/README.md) | Detailed implementation planning |
 | 🎯 Planning | [requirements-clarity](skills/requirements-clarity/README.md) | Clarify requirements before coding |
