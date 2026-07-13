@@ -7,7 +7,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$SourceDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$SourceDir = [System.IO.Path]::GetFullPath((Resolve-Path (Join-Path $PSScriptRoot "..")).Path).TrimEnd('\', '/')
 
 if ($Scope -eq "User") {
     $SharedDest = Join-Path $HOME ".agents\skills\unified-handoff"
@@ -18,10 +18,33 @@ if ($Scope -eq "User") {
     $ClaudeDest = Join-Path $ResolvedProject ".claude\skills\unified-handoff"
 }
 
+function Test-SamePath {
+    param(
+        [Parameter(Mandatory = $true)][string]$Left,
+        [Parameter(Mandatory = $true)][string]$Right
+    )
+
+    $LeftFull = [System.IO.Path]::GetFullPath($Left).TrimEnd('\', '/')
+    $RightFull = [System.IO.Path]::GetFullPath($Right).TrimEnd('\', '/')
+    if ($env:OS -eq "Windows_NT") {
+        return [System.StringComparer]::OrdinalIgnoreCase.Equals($LeftFull, $RightFull)
+    }
+    return [System.StringComparer]::Ordinal.Equals($LeftFull, $RightFull)
+}
+
 function Install-SkillCopy {
     param([Parameter(Mandatory = $true)][string]$Destination)
+
+    $Destination = [System.IO.Path]::GetFullPath($Destination)
+    if (Test-SamePath -Left $SourceDir -Right $Destination) {
+        Write-Output "Already installed at source location: $Destination"
+        return
+    }
+
     New-Item -ItemType Directory -Path (Split-Path -Parent $Destination) -Force | Out-Null
-    if (Test-Path $Destination) { Remove-Item $Destination -Recurse -Force }
+    if (Test-Path $Destination) {
+        Remove-Item $Destination -Recurse -Force
+    }
     if ($Link) {
         New-Item -ItemType SymbolicLink -Path $Destination -Target $SourceDir | Out-Null
     } else {
