@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = SKILL_ROOT / "scripts"
@@ -16,7 +17,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 import handoff_lib as lib  # noqa: E402
 
 
-def valid_document(created_at: str | None = None, mode: str = "standard") -> str:
+def valid_document(created_at: Optional[str] = None, mode: str = "standard") -> str:
     created = created_at or datetime.now(timezone.utc).isoformat(timespec="seconds")
     metadata = {
         "schema_version": "1.0",
@@ -170,7 +171,7 @@ class ValidationTests(unittest.TestCase):
     def test_secret_report_never_echoes_secret_value(self) -> None:
         secret = "sk-abcdefghijklmnopqrstuvwxyz123456"
         findings, warnings = lib.scan_secrets(f"api_key = {secret}\n")
-            
+
         self.assertFalse(warnings)
         self.assertTrue(findings)
         self.assertNotIn(secret, json.dumps(findings))
@@ -220,7 +221,7 @@ class MigrationTests(unittest.TestCase):
 
 
 class CliTests(unittest.TestCase):
-    def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
+    def run_cli(self, *args: str) -> subprocess.CompletedProcess:
         return subprocess.run(
             [sys.executable, str(CLI), *args],
             text=True,
