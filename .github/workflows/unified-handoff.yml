@@ -67,6 +67,65 @@ jobs:
           -p "test_*.py"
           -v
 
+  installer-smoke:
+    name: Installer smoke / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Test Bash copy and self-install guard
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n skills/unified-handoff/install/install.sh
+          project_root="$(mktemp -d)"
+          bash skills/unified-handoff/install/install.sh \
+            --scope project \
+            --agent all \
+            --project-root "$project_root"
+          test -f "$project_root/.agents/skills/unified-handoff/SKILL.md"
+          test -f "$project_root/.claude/skills/unified-handoff/SKILL.md"
+          bash "$project_root/.agents/skills/unified-handoff/install/install.sh" \
+            --scope project \
+            --agent codex \
+            --project-root "$project_root"
+          test -f "$project_root/.agents/skills/unified-handoff/SKILL.md"
+
+      - name: Test PowerShell copy and self-install guard
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          [scriptblock]::Create((Get-Content skills/unified-handoff/install/install.ps1 -Raw)) | Out-Null
+          $projectRoot = Join-Path $env:RUNNER_TEMP "unified-handoff-install"
+          New-Item -ItemType Directory -Path $projectRoot -Force | Out-Null
+          & skills/unified-handoff/install/install.ps1 `
+            -Scope Project `
+            -Agent All `
+            -ProjectRoot $projectRoot
+          if (-not (Test-Path (Join-Path $projectRoot ".agents/skills/unified-handoff/SKILL.md"))) {
+            throw "Shared installation did not contain SKILL.md"
+          }
+          if (-not (Test-Path (Join-Path $projectRoot ".claude/skills/unified-handoff/SKILL.md"))) {
+            throw "Claude installation did not contain SKILL.md"
+          }
+          & (Join-Path $projectRoot ".agents/skills/unified-handoff/install/install.ps1") `
+            -Scope Project `
+            -Agent Codex `
+            -ProjectRoot $projectRoot
+          if (-not (Test-Path (Join-Path $projectRoot ".agents/skills/unified-handoff/SKILL.md"))) {
+            throw "Self-install guard removed the installed skill"
+          }
+
   document-contract:
     name: Skill document contract
     runs-on: ubuntu-latest
