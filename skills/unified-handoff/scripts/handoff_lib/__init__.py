@@ -54,6 +54,7 @@ from .markdown import (
 from .migration import find_handoff_argument, legacy_timestamp, migrate_legacy
 from .models import CommandResult, Paths, ValidationResult
 from .security import (
+    PLACEHOLDER_PATTERNS,
     extract_file_references,
     is_na_with_reason,
     line_number_for_offset,
@@ -73,6 +74,7 @@ __all__ = [
     "DEFAULT_CONFIG",
     "FRONTMATTER_ORDER",
     "MODE_RECOMMENDED_SECTIONS",
+    "PLACEHOLDER_PATTERNS",
     "Paths",
     "SCHEMA_VERSION",
     "VALID_AGENTS",
