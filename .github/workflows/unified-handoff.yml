@@ -1,0 +1,159 @@
+name: Unified handoff
+
+on:
+  push:
+    branches:
+      - feat/unified-handoff-v1
+    paths:
+      - "skills/unified-handoff/**"
+      - ".github/workflows/unified-handoff.yml"
+  pull_request:
+    paths:
+      - "skills/unified-handoff/**"
+      - ".github/workflows/unified-handoff.yml"
+      - "README.md"
+      - "docs/unified-handoff/**"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / Python ${{ matrix.python-version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python-version: "3.9"
+          - os: ubuntu-latest
+            python-version: "3.10"
+          - os: ubuntu-latest
+            python-version: "3.11"
+          - os: ubuntu-latest
+            python-version: "3.12"
+          - os: ubuntu-latest
+            python-version: "3.13"
+          - os: windows-latest
+            python-version: "3.9"
+          - os: windows-latest
+            python-version: "3.13"
+          - os: macos-latest
+            python-version: "3.9"
+          - os: macos-latest
+            python-version: "3.13"
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Compile Python sources
+        run: >-
+          python -m compileall -q
+          skills/unified-handoff/scripts
+          skills/unified-handoff/tests
+
+      - name: Run unit and CLI tests
+        run: >-
+          python -m unittest discover
+          -s skills/unified-handoff/tests
+          -p "test_*.py"
+          -v
+
+  installer-smoke:
+    name: Installer smoke / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Test Bash copy and self-install guard
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n skills/unified-handoff/install/install.sh
+          project_root="$(mktemp -d)"
+          bash skills/unified-handoff/install/install.sh \
+            --scope project \
+            --agent all \
+            --project-root "$project_root"
+          test -f "$project_root/.agents/skills/unified-handoff/SKILL.md"
+          test -f "$project_root/.claude/skills/unified-handoff/SKILL.md"
+          bash "$project_root/.agents/skills/unified-handoff/install/install.sh" \
+            --scope project \
+            --agent codex \
+            --project-root "$project_root"
+          test -f "$project_root/.agents/skills/unified-handoff/SKILL.md"
+
+      - name: Test PowerShell copy and self-install guard
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          [scriptblock]::Create((Get-Content skills/unified-handoff/install/install.ps1 -Raw)) | Out-Null
+          $projectRoot = Join-Path $env:RUNNER_TEMP "unified-handoff-install"
+          New-Item -ItemType Directory -Path $projectRoot -Force | Out-Null
+          & skills/unified-handoff/install/install.ps1 `
+            -Scope Project `
+            -Agent All `
+            -ProjectRoot $projectRoot
+          if (-not (Test-Path (Join-Path $projectRoot ".agents/skills/unified-handoff/SKILL.md"))) {
+            throw "Shared installation did not contain SKILL.md"
+          }
+          if (-not (Test-Path (Join-Path $projectRoot ".claude/skills/unified-handoff/SKILL.md"))) {
+            throw "Claude installation did not contain SKILL.md"
+          }
+          & (Join-Path $projectRoot ".agents/skills/unified-handoff/install/install.ps1") `
+            -Scope Project `
+            -Agent Codex `
+            -ProjectRoot $projectRoot
+          if (-not (Test-Path (Join-Path $projectRoot ".agents/skills/unified-handoff/SKILL.md"))) {
+            throw "Self-install guard removed the installed skill"
+          }
+
+  document-contract:
+    name: Skill document contract
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify required files and frontmatter
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f skills/unified-handoff/SKILL.md
+          test -f skills/unified-handoff/README.md
+          test -f skills/unified-handoff/README.zh-CN.md
+          test -f skills/unified-handoff/references/protocol-schema.md
+          test -f skills/unified-handoff/references/handoff-template.md
+          test -f skills/unified-handoff/references/resume-checklist.md
+          grep -q '^name: unified-handoff$' skills/unified-handoff/SKILL.md
+          grep -q '^description:' skills/unified-handoff/SKILL.md
+          grep -q '^license: MIT$' skills/unified-handoff/SKILL.md
+
+      - name: Reject bootstrap delivery assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if compgen -G '.github/unified-handoff-payload.part*' > /dev/null; then
+            echo 'Bootstrap payload files must not be included in the pull request.' >&2
+            exit 1
+          fi
+          test ! -e .github/workflows/bootstrap-unified-handoff.yml

@@ -123,6 +123,7 @@ Add skills to project knowledge or paste SKILL.md contents into the conversation
 | 🛠️ Development | [lesson-learned](skills/lesson-learned/README.md) | Extract SE lessons from recent code changes |
 | 🛠️ Development | [reducing-entropy](skills/reducing-entropy/README.md) | Minimize codebase size |
 | 🛠️ Development | [session-handoff](skills/session-handoff/README.md) | Seamless AI session transfers |
+| 🛠️ Development | [unified-handoff](skills/unified-handoff/README.md) | Validated cross-agent session transfers |
 | 🎯 Planning | [game-changing-features](skills/game-changing-features/README.md) | Find 10x product opportunities |
 | 🎯 Planning | [gepetto](skills/gepetto/README.md) | Detailed implementation planning |
 | 🎯 Planning | [requirements-clarity](skills/requirements-clarity/README.md) | Clarify requirements before coding |

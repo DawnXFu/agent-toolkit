@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "storage_dir": ".agent-context",
+  "handoffs_subdir": "handoffs",
+  "latest_file": "HANDOFF.md",
+  "default_mode": "standard",
+  "default_target_agent": "any",
+  "default_language": "auto",
+  "track_in_git": true,
+  "quality_thresholds": {
+    "compact": 70,
+    "standard": 80,
+    "full": 85
+  },
+  "base_branch": "auto",
+  "test_commands": [],
+  "environment_variable_names": [],
+  "custom_secret_patterns": [],
+  "active_process_detection": false,
+  "staleness": {
+    "slight_days": 1,
+    "stale_days": 7,
+    "very_stale_days": 30,
+    "slight_commits": 5,
+    "stale_commits": 20,
+    "very_stale_commits": 50,
+    "slight_files": 5,
+    "stale_files": 20
+  }
+}
