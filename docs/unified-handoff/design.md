@@ -2,7 +2,7 @@
 
 ## 1. Design Goals
 
-The system standardizes the handoff artifact rather than trying to standardize vendor session storage. A validated Markdown document is the source of truth. Agent-specific behavior is kept at the edges through adapter guidance.
+The system standardizes the handoff artifact rather than vendor session storage. A validated Markdown document is the source of truth, while agent-specific behavior remains at the edges through adapter guidance.
 
 Design priorities:
 
@@ -12,8 +12,9 @@ Design priorities:
 4. Safe failure behavior
 5. Low installation friction
 6. Compatibility with the open Agent Skills format
+7. Maintainable, independently testable Python modules
 
-## 2. Architecture
+## 2. System Architecture
 
 ```text
 Agent invocation
@@ -38,13 +39,81 @@ SKILL.md workflow
       └── migrate ────────► copied legacy handoffs
 ```
 
-The implementation is split into:
+Repository components:
 
-- `scripts/handoff_lib.py`: pure and reusable domain logic
-- `scripts/unified_handoff.py`: command-line interface
+- `scripts/unified_handoff.py`: command-line interface and exit-code policy
+- `scripts/handoff_lib/`: reusable domain package
+- `scripts/handoff_lib/__init__.py`: stable public compatibility boundary
 - `SKILL.md`: agent workflow and invocation rules
 - `references/`: protocol, template, adapters, and checklists
 - `tests/`: standard-library `unittest` suite
+
+### 2.1 Package boundaries
+
+The `handoff_lib` package is organized by responsibility:
+
+| Module | Responsibility |
+|---|---|
+| `constants.py` | Protocol constants, defaults, section policy, built-in secret patterns |
+| `models.py` | Shared dataclasses for commands, resolved paths, and validation results |
+| `system.py` | Time, subprocess, deep-merge, and atomic-write primitives |
+| `markdown.py` | Scalar frontmatter parsing, rendering, section extraction, slug handling |
+| `git.py` | Git-root resolution, remote sanitization, branch and working-tree metadata |
+| `config.py` | Configuration validation, project-root resolution, storage paths |
+| `environment.py` | Tool detection, test-command inference, adapter text, scaffold formatting |
+| `drafts.py` | Draft discovery, predecessor linking, and handoff scaffold generation |
+| `security.py` | Placeholder checks, secret scanning, and file-reference verification |
+| `validation.py` | Quality scoring, finalization, latest-copy updates, and listing |
+| `staleness.py` | Age/Git/reference comparison and resume recommendations |
+| `migration.py` | Legacy Claude handoff migration and handoff argument lookup |
+
+Modules use explicit relative imports. There is no execution-order coupling, dynamic `exec`, generated source concatenation, or hidden shared namespace.
+
+### 2.2 Dependency direction
+
+Low-level modules do not import workflow modules:
+
+```text
+constants / models
+        │
+        ▼
+system / markdown
+        │
+        ├── git
+        ├── config
+        ├── environment
+        └── security
+                │
+                ▼
+      drafts / validation / staleness / migration
+                │
+                ▼
+             __init__.py
+                │
+                ▼
+        unified_handoff.py
+```
+
+The dependency graph is intentionally acyclic. Workflow modules compose lower-level services; the public package initializer only re-exports symbols.
+
+### 2.3 Public API compatibility
+
+Existing callers continue to use:
+
+```python
+from handoff_lib import create_draft, validate_handoff, resume_prompt
+```
+
+`handoff_lib/__init__.py` defines an explicit `__all__` list and re-exports the historical public surface. Internal module paths may evolve without forcing CLI or consumer changes.
+
+Architecture tests enforce that:
+
+- `handoff_lib` resolves to a package
+- every domain module imports independently
+- the CLI-required public symbols remain exported
+- `scripts/handoff_lib.py` does not return
+- `scripts/handoff_lib_parts/` does not return
+- no `exec(compile(...))` loader is introduced
 
 ## 3. Project and Storage Resolution
 
@@ -132,9 +201,9 @@ git diff --name-only <base>...HEAD
 
 The remote URL sanitizer removes HTTP user information. No full diff is generated.
 
-## 7. Environment and Test Command Inference
+## 7. Environment and Command Inference
 
-Environment collection is descriptive, not executable. The scaffold records detected tools and candidate commands. It does not run tests during creation.
+Environment collection is descriptive, not executable. Draft creation records detected tools and candidate commands but does not run them.
 
 Inference sources:
 
@@ -170,9 +239,7 @@ Finalization is blocked when:
 
 ### 8.2 Scoring
 
-The score starts at 100.
-
-Typical deductions:
+The score starts at 100. Typical deductions include:
 
 - Blocking section problem: 25 each
 - Secret finding: 30 total plus blocking verdict
@@ -194,40 +261,24 @@ Thresholds come from configuration and default to 70/80/85.
 4. Removal of the corresponding draft
 5. Atomic physical copy to `HANDOFF.md`
 
-If any stage before finalization fails, `HANDOFF.md` is untouched.
+If validation fails, the draft is updated with its score and remains a draft. `HANDOFF.md` is untouched.
 
-## 9. Secret Detection
+## 9. Security and Reference Verification
 
-Built-in regexes cover common credential classes. Findings contain:
+Built-in secret patterns cover common credential classes. Findings contain only type and line number; matched values are never returned.
 
-- Finding type
-- Line number
-- Count
+Custom patterns come from `custom_secret_patterns`. Invalid custom regular expressions produce warnings rather than crashes.
 
-They never include matched text. Content inside allowed redaction markers is not treated as a credential.
+The validator extracts likely repository-relative paths from Markdown tables, inline code spans, and `path/to/file.ext:line` references. URLs, command options, paths outside the project root, and malformed candidates are excluded. Missing references are warnings and score deductions, not blocking errors.
 
-Custom patterns are loaded from `custom_secret_patterns`. Invalid custom regexes produce warnings rather than crashes.
+## 10. Staleness Model
 
-## 10. Reference Verification
-
-The validator extracts likely repository-relative paths from:
-
-- Markdown tables
-- Inline code spans
-- `path/to/file.ext:line` references
-
-It excludes URLs, command options, and paths outside the project root. Missing references are warnings and score deductions, not blocking errors.
-
-## 11. Staleness Model
-
-The preferred baseline is `head_commit` from frontmatter.
-
-Git-aware checks:
+The preferred baseline is `head_commit` from frontmatter. Git-aware checks include:
 
 - Current branch differs from recorded branch
 - Number of commits since recorded HEAD
 - Files changed since recorded HEAD
-- Recorded files removed
+- Referenced files removed
 - Current working tree differs
 
 Time age is a secondary factor. If the recorded commit no longer exists, the report marks the baseline unavailable and falls back to age and file checks.
@@ -242,7 +293,7 @@ Levels:
 
 Thresholds are configurable.
 
-## 12. Agent Adapters
+## 11. Agent Adapters and Installation
 
 The core artifact stays agent-neutral. Adapters define only invocation and resumption guidance.
 
@@ -251,25 +302,9 @@ The core artifact stays agent-neutral. Adapters define only invocation and resum
 - OpenCode uses `.agents/skills/`, `.opencode/skills/`, or Claude-compatible locations and its native skill tool.
 - Generic tools read `SKILL.md` and run the bundled Python CLI.
 
-The generated `Resume Instructions` include a neutral prompt plus target-specific startup notes. They do not depend on proprietary session IDs.
+Bash and PowerShell installers support project/user scope, agent selection, copy installation, and optional linking. Both installers detect source-equals-destination and avoid deleting an installed copy when re-run from that copy.
 
-## 13. Installation Design
-
-The Bash and PowerShell installers accept:
-
-- `--scope project|user`
-- `--agent claude|codex|opencode|all`
-- optional `--link`
-
-Copy is the default. For `all`:
-
-- Install shared copy into `.agents/skills/unified-handoff`.
-- Install a Claude copy into `.claude/skills/unified-handoff`.
-- OpenCode discovers the shared `.agents` copy.
-
-The user-scope equivalents live under the user's home directory.
-
-## 14. Legacy Compatibility
+## 12. Legacy Compatibility
 
 `list --include-legacy` reads `.claude/handoffs/*.md` without modifying them.
 
@@ -283,22 +318,24 @@ The user-scope equivalents live under the user's home directory.
 
 Legacy files are not automatically promoted to `HANDOFF.md` because they have not passed the new validator.
 
-## 15. Error Handling
+## 13. Error Handling
 
 CLI commands return:
 
 - `0`: success or ready
-- `1`: validation failure, stale warning requiring review, or user-correctable error
-- `2`: argument/configuration error
+- `1`: validation failure or stale state requiring review
+- `2`: argument, configuration, or missing-resource error
 
 Human output is concise. `--json` emits structured results for automation.
 
-## 16. Test Design
+## 14. Test Design
 
-Tests use `tempfile.TemporaryDirectory` and create isolated repositories when Git is available. No network is required.
+Tests use `tempfile.TemporaryDirectory` and isolated repositories when Git is available. No network is required.
 
-Test groups:
+Coverage includes:
 
+- Package architecture and independent module imports
+- Public API compatibility
 - Configuration and project-root resolution
 - Frontmatter round trip
 - Draft creation in Git and non-Git directories
@@ -309,8 +346,11 @@ Test groups:
 - Staleness comparison
 - Unicode and spaced paths
 - CLI smoke tests
+- Bash and PowerShell installer smoke tests
 
-## 17. Compatibility and Constraints
+CI compiles and tests Python 3.9 through 3.13 across Ubuntu, Windows, and macOS.
+
+## 15. Compatibility and Constraints
 
 - Python 3.9+
 - Standard library only
