@@ -23,14 +23,22 @@
 - [x] Add Bash and PowerShell installers.
 - [x] Add repository skill index entry.
 
+## Architecture
+
+- [x] Replace the dynamic `exec`-based implementation loader with a conventional Python package.
+- [x] Separate configuration, Markdown, Git, environment, draft, validation, security, staleness, and migration concerns.
+- [x] Preserve the existing `from handoff_lib import ...` public API through explicit re-exports.
+- [x] Add regression tests that reject `handoff_lib.py`, `handoff_lib_parts/`, and `exec(compile(...))` loaders.
+
 ## Verification
 
 - [x] Add standard-library unit and CLI tests.
 - [x] Add Python compile checks.
 - [x] Add Ubuntu, Windows, and macOS CI coverage for Python 3.9 through 3.13.
+- [x] Add Bash and PowerShell installer smoke tests.
 - [x] Remove bootstrap payloads and write-enabled delivery workflows.
-- [ ] Confirm all pull-request checks pass.
+- [ ] Confirm all pull-request checks pass after the package refactor.
 
 ## Review notes
 
-The implementation uses a small `handoff_lib.py` facade that loads ordered implementation parts. This keeps the public import stable while allowing the files to remain transportable through conservative repository connectors. A future maintenance refactor may replace the ordered parts with conventional package modules without changing the public CLI or protocol.
+The implementation now lives in `scripts/handoff_lib/` as ordinary Python modules. `scripts/handoff_lib/__init__.py` is the compatibility boundary for the CLI and external imports. Domain modules use explicit relative imports, can be tested independently, and no longer depend on shared execution order or repository transport limits.
