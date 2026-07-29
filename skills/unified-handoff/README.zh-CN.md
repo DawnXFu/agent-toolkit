@@ -106,11 +106,10 @@ python "$SKILL_DIR/scripts/unified_handoff.py" migrate
 ## 测试
 
 ```bash
-python -m unittest discover -s skills/unified-handoff/tests -v
-python -m py_compile \
-  skills/unified-handoff/scripts/handoff_lib.py \
-  skills/unified-handoff/scripts/handoff_lib_parts/*.py \
-  skills/unified-handoff/scripts/unified_handoff.py
+python -m unittest discover -s skills/unified-handoff/tests -p "test_*.py" -v
+python -m compileall -q \
+  skills/unified-handoff/scripts \
+  skills/unified-handoff/tests
 ```
 
 详细协议和使用约束见 `references/`。本项目基于 `softaworks/agent-toolkit` 的 `session-handoff` 改造，并保留上游 MIT 许可证与来源说明。
