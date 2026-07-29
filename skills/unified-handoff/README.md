@@ -126,11 +126,10 @@ Migration leaves `.claude/handoffs/` untouched. Copied files receive `status: le
 ## Testing
 
 ```bash
-python -m unittest discover -s skills/unified-handoff/tests -v
-python -m py_compile \
-  skills/unified-handoff/scripts/handoff_lib.py \
-  skills/unified-handoff/scripts/handoff_lib_parts/*.py \
-  skills/unified-handoff/scripts/unified_handoff.py
+python -m unittest discover -s skills/unified-handoff/tests -p "test_*.py" -v
+python -m compileall -q \
+  skills/unified-handoff/scripts \
+  skills/unified-handoff/tests
 ```
 
 ## Documentation
